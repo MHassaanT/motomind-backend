@@ -1,0 +1,33 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Next.js build output
+.next/
+out/
+
+# Production build output
+dist/
+build/
+
+# WhatsApp Session Data (CRITICAL for security)
+# We ignore this because Railway uses Volumes for persistence instead of Git
+.wwebjs_auth/
+.wwebjs_cache/
+data/whatsapp-sessions/
+
+# Firebase & Secret Keys (CRITICAL for security)
+serviceAccountKey.json
+.env
+.env.local
+.env.production
+.env*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db

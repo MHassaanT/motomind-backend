@@ -1,0 +1,9 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "start": "node server.js",
+    "nixPkgs": ["google-chrome", "glib", "nss", "nspr"]
+  }
+}
