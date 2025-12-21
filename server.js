@@ -7,7 +7,7 @@ const qrcode = require('qrcode');
 
 const app = express();
 // CHANGED: Use dynamic port for Railway
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 
 // CHANGED: Updated CORS for production
 app.use(cors());
@@ -333,4 +333,5 @@ cron.schedule('0 9 * * *', async () => {
 });
 
 // CHANGED: Use dynamic port variable
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
