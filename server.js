@@ -9,8 +9,17 @@ const app = express();
 // CHANGED: Use dynamic port for Railway
 const PORT = process.env.PORT || 8080;
 
-// CHANGED: Updated CORS for production
-app.use(cors());
+// Specific CORS configuration
+app.use(cors({
+  origin: 'https://motomind-frontend.vercel.app', // Allow only your frontend
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true // Optional: only if you start using cookies/sessions
+}));
+
+// Explicitly handle OPTIONS preflight for all routes
+app.options('*', cors()); 
+
 app.use(express.json());
 
 // CHANGED: Decode the Base64 Service Account Key from environment variables
@@ -335,3 +344,4 @@ cron.schedule('0 9 * * *', async () => {
 // CHANGED: Use dynamic port variable
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
