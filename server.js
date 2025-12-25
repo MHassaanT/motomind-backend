@@ -353,7 +353,5 @@ cron.schedule('0 9 * * *', async () => {
 
 // CHANGED: Use dynamic port variable
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 
