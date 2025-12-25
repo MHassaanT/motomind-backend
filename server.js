@@ -185,6 +185,13 @@ async function getOrCreateClient(userId) {
   return client;
 }
 
+// ---------------- HEALTH CHECK ----------------
+// This is required for the Google Load Balancer to mark the backend as HEALTHY
+app.get('/', (req, res) => {
+  res.status(200).send('MotoMind Backend is Running');
+});
+
+
 // ---------------- API ENDPOINTS ----------------
 
 app.get('/api/whatsapp/status', verifyToken, async (req, res) => {
@@ -347,5 +354,6 @@ cron.schedule('0 9 * * *', async () => {
 // CHANGED: Use dynamic port variable
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
