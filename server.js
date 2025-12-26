@@ -133,6 +133,7 @@ async function getOrCreateClient(userId) {
   // CHANGED: Puppeteer configuration for Railway Linux environment
   const client = new Client({
     authStrategy: new LocalAuth({
+        clientId: `user-${userId}`,
         dataPath: './.wwebjs_auth' 
     }),
     puppeteer: { 
@@ -354,4 +355,5 @@ cron.schedule('0 9 * * *', async () => {
 // CHANGED: Use dynamic port variable
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
 
