@@ -109,8 +109,8 @@ ${record.notes ? '\n📝 *Notes*\n' + record.notes + '\n' : ''}
 ━━━━━━━━━━━━━━━━━━━
 Thank you for choosing us!
 
-🔧 *ZareaAI - MotoMind*
-Auto Workshop Assistant
+🔧 *Rafi Auto Service*
+Atlas Honda Verified Antenna Dealership
   `.trim();
 }
 
@@ -121,7 +121,7 @@ async function getOrCreateClient(userId) {
     try {
       const state = await clients[userId].getState();
       console.log(`[${userId}] Client exists. State: ${state}`);
-      return clients[userId];
+      if (state === 'CONNECTED') return clients[userId];
     } catch (e) {
       console.log(`[${userId}] Existing client unresponsive. Re-initializing...`);
       delete clients[userId];
@@ -130,12 +130,7 @@ async function getOrCreateClient(userId) {
 
   console.log(`[${userId}] Initializing new WhatsApp client...`);
 
-  // CHANGED: Puppeteer configuration for Railway Linux environment
   const client = new Client({
-    authStrategy: new LocalAuth({
-        clientId: `user-${userId}`,
-        dataPath: './.wwebjs_auth' 
-    }),
     puppeteer: { 
       headless: true, 
       args: [
@@ -149,7 +144,6 @@ async function getOrCreateClient(userId) {
       ],
       executablePath: process.env.CHROME_PATH || '/usr/bin/chromium'
     },
-    // CHANGED: Use persistent volume path for Railway sessions
     authStrategy: new LocalAuth({ 
       clientId: `user-${userId}`,
       dataPath: '/data/whatsapp-sessions' 
@@ -176,18 +170,29 @@ async function getOrCreateClient(userId) {
     }, { merge: true });
   });
 
-  client.initialize().catch(async (err) => {
-    console.error(`[${userId}] CRITICAL: Initialization failed:`, err);
-    delete clients[userId];
-    await db.collection('whatsapp_sessions').doc(userId).set({ status: 'error' });
-  });
-
   clients[userId] = client;
-  return client;
+  
+  // Return a promise that resolves when the client is ready or rejects on error
+  return new Promise((resolve, reject) => {
+    client.initialize().catch(err => reject(err));
+    
+    // If it's a restored session, it might trigger 'ready' quickly
+    const timeout = setTimeout(() => {
+        if (client.info) resolve(client);
+    }, 5000);
+
+    client.once('ready', () => {
+        clearTimeout(timeout);
+        resolve(client);
+    });
+
+    client.once('auth_failure', (msg) => {
+        reject(new Error('Auth failure: ' + msg));
+    });
+  });
 }
 
 // ---------------- HEALTH CHECK ----------------
-// This is required for the Google Load Balancer to mark the backend as HEALTHY
 app.get('/', (req, res) => {
   res.status(200).send('MotoMind Backend is Running');
 });
@@ -201,8 +206,12 @@ app.get('/api/whatsapp/status', verifyToken, async (req, res) => {
 });
 
 app.post('/api/whatsapp/connect', verifyToken, async (req, res) => {
-  await getOrCreateClient(req.user.uid);
-  res.json({ message: 'Initializing WhatsApp...' });
+  try {
+    getOrCreateClient(req.user.uid); // Run in background
+    res.json({ message: 'Initializing WhatsApp...' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to trigger connection' });
+  }
 });
 
 app.post('/api/whatsapp/clear-qr', verifyToken, async (req, res) => {
@@ -287,16 +296,16 @@ app.post('/api/records/:id/send', verifyToken, async (req, res) => {
     let whatsappSent = false;
     let whatsappError = null;
 
-    const client = clients[userId];
-    if (client && client.info) {
-      try {
-        await client.sendMessage(chatId, billMessage);
-        whatsappSent = true;
-      } catch (err) {
+    try {
+        const client = await getOrCreateClient(userId);
+        if (client && client.info) {
+          await client.sendMessage(chatId, billMessage);
+          whatsappSent = true;
+        } else {
+          whatsappError = "WhatsApp client not connected or ready";
+        }
+    } catch (err) {
         whatsappError = err.message;
-      }
-    } else {
-      whatsappError = "WhatsApp client not connected or ready";
     }
 
     await docRef.update({
@@ -315,36 +324,45 @@ app.post('/api/records/:id/send', verifyToken, async (req, res) => {
   }
 });
 
-// ---------------- CRON JOB (REMINDERS) ----------------
+// ---------------- CRON JOB (REMINDERS WITH AUTO-INIT) ----------------
 
 cron.schedule('0 9 * * *', async () => {
   console.log('🔄 Running daily service reminders check...');
   const today = new Date().toISOString().split('T')[0];
 
   try {
+    // 1. First, check if there are any records due for today
     const snapshot = await db.collection('serviceRecords')
       .where('nextServiceDate', '==', today)
       .where('finalized', '==', true)
       .get();
 
+    if (snapshot.empty) {
+      console.log('📅 No service records due today.');
+      return;
+    }
+
+    // 2. If records exist, process them
     for (const doc of snapshot.docs) {
       const record = doc.data();
       const userId = record.userId;
-      const client = clients[userId];
+      
+      try {
+        // 3. Check if session exists or auto-initialize from disk
+        const client = await getOrCreateClient(userId);
 
-      if (client && client.info) {
-        const chatId = formatPhoneNumber(record.phone);
-        const reminderMsg = `🔔 *Service Reminder*\n\nHello ${record.name}!\nYour ${record.bikeType} is due for service today. Last service was on ${record.currentDate}.\n\nPlease visit us for maintenance.`;
-        
-        try {
+        if (client && client.info) {
+          const chatId = formatPhoneNumber(record.phone);
+          const reminderMsg = `🔔 *Service Reminder*\n\nHello ${record.name}!\nYour ${record.bikeType} is due for service today. Last service was on ${record.currentDate}.\n\nPlease visit us for maintenance.`;
+          
           await client.sendMessage(chatId, reminderMsg);
           await db.collection('serviceRecords').doc(doc.id).update({
             reminderSentAt: admin.firestore.FieldValue.serverTimestamp()
           });
           console.log(`✅ Reminder sent for ${record.name}`);
-        } catch (err) {
-          console.error(`❌ Failed reminder for ${record.name}:`, err.message);
         }
+      } catch (err) {
+        console.error(`❌ Failed reminder for ${record.name}:`, err.message);
       }
     }
   } catch (error) {
@@ -352,9 +370,4 @@ cron.schedule('0 9 * * *', async () => {
   }
 });
 
-// CHANGED: Use dynamic port variable
-
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
-
-
-
