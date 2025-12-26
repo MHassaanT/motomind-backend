@@ -15,7 +15,7 @@ WORKDIR /usr/src/app
 
 # Copy package files first to leverage Docker layer caching
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy the rest of your backend code
 COPY . .
