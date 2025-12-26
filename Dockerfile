@@ -1,7 +1,6 @@
 # Use a stable Node.js base image
 FROM node:20-slim
 
-# Install Chromium and the system libraries Puppeteer requires
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
