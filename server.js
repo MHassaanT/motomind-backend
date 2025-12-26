@@ -147,7 +147,7 @@ async function getOrCreateClient(userId) {
         '--no-zygote',
         '--disable-gpu'
       ],
-      executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome'
+      executablePath: process.env.CHROME_PATH || '/usr/bin/chromium'
     },
     // CHANGED: Use persistent volume path for Railway sessions
     authStrategy: new LocalAuth({ 
@@ -355,5 +355,6 @@ cron.schedule('0 9 * * *', async () => {
 // CHANGED: Use dynamic port variable
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
 
 
