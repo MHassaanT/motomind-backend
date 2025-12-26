@@ -22,6 +22,8 @@ spec:
         env:
         - name: PORT
           value: "8080"
+        - name: CHROME_PATH
+          value: "/usr/bin/chromium"
         - name: BASE64_SERVICE_ACCOUNT_KEY
           valueFrom:
             secretKeyRef:
@@ -36,7 +38,7 @@ spec:
             memory: "2Gi"
         volumeMounts:
         - name: whatsapp-session-storage
-          mountPath: /usr/src/app/.wwebjs_auth # This matches your LocalAuth path
+          mountPath: /usr/src/app/.wwebjs_auth# This matches your LocalAuth path
       volumes:
       - name: whatsapp-session-storage
         persistentVolumeClaim:
