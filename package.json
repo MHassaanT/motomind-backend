@@ -15,9 +15,11 @@
     "puppeteer": "^21.6.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
+    "adm-zip": "^0.5.10",
     "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   }
 }
+
