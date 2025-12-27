@@ -237,6 +237,31 @@ async function getOrCreateClient(userId) {
     await saveSessionToCloud(userId);
   });
 
+  // ADDED: Listen for disconnection events
+  client.on('disconnected', async (reason) => {
+    console.log(`[${userId}] WhatsApp Disconnected:`, reason);
+    await db.collection('whatsapp_sessions').doc(userId).set({
+      status: 'disconnected',
+      qr: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    if (clients[userId]) {
+      await clients[userId].destroy().catch(() => {});
+      delete clients[userId];
+    }
+  });
+
+  // ADDED: Listen for authentication failures
+  client.on('auth_failure', async (msg) => {
+    console.error(`[${userId}] Auth failure:`, msg);
+    await db.collection('whatsapp_sessions').doc(userId).set({
+      status: 'disconnected',
+      qr: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+
   clients[userId] = client;
   
   return new Promise((resolve, reject) => {
@@ -266,8 +291,18 @@ app.get('/', (req, res) => {
 // ---------------- API ENDPOINTS ----------------
 
 app.get('/api/whatsapp/status', verifyToken, async (req, res) => {
-  const doc = await db.collection('whatsapp_sessions').doc(req.user.uid).get();
-  res.json(doc.exists ? doc.data() : { status: 'disconnected', qr: null });
+  const userId = req.user.uid;
+  const doc = await db.collection('whatsapp_sessions').doc(userId).get();
+  
+  let data = doc.exists ? doc.data() : { status: 'disconnected', qr: null };
+
+  // ADDED: Sync logic if server restarted and memory was cleared
+  if (data.status === 'connected' && !clients[userId]) {
+    data.status = 'disconnected';
+    await db.collection('whatsapp_sessions').doc(userId).update({ status: 'disconnected' });
+  }
+
+  res.json(data);
 });
 
 app.post('/api/whatsapp/connect', verifyToken, async (req, res) => {
