@@ -99,7 +99,13 @@ function formatPhoneNumber(phone) {
 }
 
 function generateBillMessage(record) {
-  const servicesPerformed = record.services?.join(', ') || 'None';
+  const partsList = record.selectedParts 
+    ? Object.entries(record.selectedParts).map(([name, data]) => `- ${name} (x${data.quantity}): Rs. ${data.charges}`).join('\n')
+    : 'None';
+    
+  const servicesList = record.selectedServices 
+    ? Object.entries(record.selectedServices).map(([name, data]) => `- ${name}: Rs. ${data.charges}`).join('\n')
+    : 'None';
   
   return `
 ╔════════════════════════════╗
@@ -116,21 +122,22 @@ function generateBillMessage(record) {
 Date: ${record.currentDate}
 Next Service: ${record.nextServiceDate}
 
-✅ *Services Performed*
-${servicesPerformed}
+📦 *Parts Replaced*
+${partsList}
 
-💰 *Charges*
-Labor: Rs. ${record.laborCharges}
-Parts: Rs. ${record.partsCharges}
+🛠️ *Services Performed*
+${servicesList}
+
+💰 *Final Summary*
+Labor Charges: Rs. ${record.laborCharges}
+Parts Charges: Rs. ${record.partsCharges}
 ━━━━━━━━━━━━━━━━━━━
-*TOTAL: Rs. ${record.totalAmount}*
-
-${record.notes ? '\n📝 *Notes*\n' + record.notes + '\n' : ''}
+*TOTAL AMOUNT: Rs. ${record.totalAmount}*
 ━━━━━━━━━━━━━━━━━━━
 Thank you for choosing us!
 
 🔧 *Rafi Auto Service*
-Atlas Honda Verified Antenna Dealership
+Atlas Honda Verified Dealership
   `.trim();
 }
 
@@ -476,3 +483,4 @@ cron.schedule('0 9 * * *', async () => {
 });
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
