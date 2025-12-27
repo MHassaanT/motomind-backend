@@ -143,7 +143,8 @@ async function saveSessionToCloud(userId) {
     if (!fs.existsSync(userSessionDir)) return;
 
     const zip = new AdmZip();
-    zip.addLocalFolder(userSessionDir);
+    // SKIP files that Chromium keeps locked (SingletonLock) to prevent ENOENT errors
+    zip.addLocalFolder(userSessionDir, "", (filename) => !filename.includes('SingletonLock'));
     const buffer = zip.toBuffer();
 
     const file = bucket.file(`whatsapp-sessions/${userId}.zip`);
@@ -189,6 +190,9 @@ async function getOrCreateClient(userId) {
     }
   }
 
+  // Ensure root auth directory exists
+  if (!fs.existsSync(SESSION_PATH)) fs.mkdirSync(SESSION_PATH, { recursive: true });
+
   // Restore session before initializing
   await restoreSessionFromCloud(userId);
 
@@ -233,8 +237,10 @@ async function getOrCreateClient(userId) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    // Backup session once ready
-    await saveSessionToCloud(userId);
+    // BACKUP DELAY: Wait 5 seconds to let Chromium finish writing files to disk
+    setTimeout(async () => {
+      await saveSessionToCloud(userId);
+    }, 5000);
   });
 
   // ADDED: Listen for disconnection events
