@@ -150,8 +150,14 @@ async function saveSessionToCloud(userId) {
     if (!fs.existsSync(userSessionDir)) return;
 
     const zip = new AdmZip();
-    // SKIP files that Chromium keeps locked (SingletonLock) to prevent ENOENT errors
-    zip.addLocalFolder(userSessionDir, "", (filename) => !filename.includes('SingletonLock'));
+    // CHANGED: Expanded filter to skip all Singleton lock/socket/cookie files to prevent ENOENT errors
+    zip.addLocalFolder(userSessionDir, "", (filename) => {
+      const isLockFile = filename.includes('SingletonLock') || 
+                         filename.includes('SingletonCookie') || 
+                         filename.includes('SingletonSocket');
+      return !isLockFile;
+    });
+    
     const buffer = zip.toBuffer();
 
     const file = bucket.file(`whatsapp-sessions/${userId}.zip`);
@@ -244,13 +250,12 @@ async function getOrCreateClient(userId) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    // BACKUP DELAY: Wait 5 seconds to let Chromium finish writing files to disk
+    // CHANGED: Increased delay to 10 seconds to ensure Chromium finishes file operations
     setTimeout(async () => {
       await saveSessionToCloud(userId);
-    }, 5000);
+    }, 10000);
   });
 
-  // ADDED: Listen for disconnection events
   client.on('disconnected', async (reason) => {
     console.log(`[${userId}] WhatsApp Disconnected:`, reason);
     await db.collection('whatsapp_sessions').doc(userId).set({
@@ -265,7 +270,6 @@ async function getOrCreateClient(userId) {
     }
   });
 
-  // ADDED: Listen for authentication failures
   client.on('auth_failure', async (msg) => {
     console.error(`[${userId}] Auth failure:`, msg);
     await db.collection('whatsapp_sessions').doc(userId).set({
@@ -309,7 +313,6 @@ app.get('/api/whatsapp/status', verifyToken, async (req, res) => {
   
   let data = doc.exists ? doc.data() : { status: 'disconnected', qr: null };
 
-  // ADDED: Sync logic if server restarted and memory was cleared
   if (data.status === 'connected' && !clients[userId]) {
     data.status = 'disconnected';
     await db.collection('whatsapp_sessions').doc(userId).update({ status: 'disconnected' });
@@ -335,7 +338,6 @@ app.post('/api/whatsapp/clear-qr', verifyToken, async (req, res) => {
       delete clients[userId];
     }
     await db.collection('whatsapp_sessions').doc(userId).delete();
-    // Also remove from cloud storage if cleared
     if (bucket) await bucket.file(`whatsapp-sessions/${userId}.zip`).delete().catch(() => {});
     res.json({ success: true });
   } catch (error) {
@@ -439,7 +441,7 @@ app.post('/api/records/:id/send', verifyToken, async (req, res) => {
   }
 });
 
-// ---------------- CRON JOB (REMINDERS WITH AUTO-INIT) ----------------
+// ---------------- CRON JOB ----------------
 
 cron.schedule('0 9 * * *', async () => {
   console.log('🔄 Running daily service reminders check...');
@@ -483,4 +485,3 @@ cron.schedule('0 9 * * *', async () => {
 });
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
-
