@@ -150,16 +150,36 @@ async function saveSessionToCloud(userId) {
     if (!fs.existsSync(userSessionDir)) return;
 
     const zip = new AdmZip();
-    // CHANGED: Expanded filter to skip all Singleton lock/socket/cookie files to prevent ENOENT errors
-    zip.addLocalFolder(userSessionDir, "", (filename) => {
-      const isLockFile = filename.includes('SingletonLock') || 
-                         filename.includes('SingletonCookie') || 
-                         filename.includes('SingletonSocket');
-      return !isLockFile;
-    });
     
-    const buffer = zip.toBuffer();
+    // Function to recursively add files and handle disappearing temp files
+    const addDirectoryToZip = (localPath, zipPath) => {
+      const files = fs.readdirSync(localPath);
 
+      for (const file of files) {
+        const localFilePath = path.join(localPath, file);
+        const zipFilePath = path.join(zipPath, file);
+
+        // Skip Chromium lock/temp files explicitly
+        if (file.includes('Singleton') || file.includes('lock')) continue;
+
+        try {
+          const stats = fs.statSync(localFilePath);
+          if (stats.isDirectory()) {
+            addDirectoryToZip(localFilePath, zipFilePath);
+          } else {
+            zip.addLocalFile(localFilePath, zipPath);
+          }
+        } catch (e) {
+          // If file disappears (ENOENT) or is locked, just skip it
+          console.log(`[${userId}] Skipping transient file: ${file}`);
+          continue;
+        }
+      }
+    };
+
+    addDirectoryToZip(userSessionDir, "");
+
+    const buffer = zip.toBuffer();
     const file = bucket.file(`whatsapp-sessions/${userId}.zip`);
     await file.save(buffer);
     console.log(`[${userId}] Session backed up to Blaze Storage.`);
@@ -485,4 +505,5 @@ cron.schedule('0 9 * * *', async () => {
 });
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
 
