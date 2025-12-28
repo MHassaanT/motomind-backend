@@ -383,15 +383,39 @@ app.post('/api/records', verifyToken, async (req, res) => {
 
 app.get('/api/records', verifyToken, async (req, res) => {
   try {
-    const snapshot = await db.collection('serviceRecords')
-      .where('userId', '==', req.user.uid)
+    const { page = 1, limit = 10, startDate, endDate } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let query = db.collection('serviceRecords')
+      .where('userId', '==', req.user.uid);
+
+    // Apply Date Range Filtering if provided
+    if (startDate) {
+      query = query.where('currentDate', '>=', startDate);
+    }
+    if (endDate) {
+      query = query.where('currentDate', '<=', endDate);
+    }
+
+    // Apply Newest First Sorting and Pagination
+    // Note: Firestore requires an index for this combination of filters and ordering
+    const snapshot = await query
+      .orderBy('currentDate', 'desc') 
+      .limit(parseInt(limit))
+      .offset(offset)
       .get();
 
     const records = [];
     snapshot.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
-    res.json({ records });
+
+    res.json({ 
+      records,
+      currentPage: parseInt(page),
+      count: records.length 
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch records' });
+    console.error('Fetch records error:', error);
+    res.status(500).json({ error: 'Failed to fetch records. Check if Firestore Index is created.' });
   }
 });
 
@@ -505,5 +529,6 @@ cron.schedule('0 9 * * *', async () => {
 });
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
 
 
