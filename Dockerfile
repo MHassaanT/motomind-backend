@@ -1,7 +1,6 @@
 # Use a stable Node.js base image
 FROM node:20-slim
 
-# Install Chromium AND the specific system libraries it needs to run
 RUN apt-get update && apt-get install -y \
     git \
     build-essential \
